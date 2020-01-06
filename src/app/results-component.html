@@ -1,0 +1,13 @@
+<div class="row" *ngFor="let res of Results">
+    <div class="col-md-2">
+        {{res.FreeDays}} Freie Tage:
+    </div>
+    <div class="col-md-10">
+        <span *ngFor="let type of res.DayTypes; index as i">
+            <button type="button" class="btn btn-sm" [class.btn-secondary]="type == FreeDayTypes.NONE"
+                [class.btn-success]="type == FreeDayTypes.HOLIDAY" [class.btn-primary]="type == FreeDayTypes.WEEKEND"
+                [class.btn-info]="type == FreeDayTypes.BRIDGE_DAY" [ngbTooltip]="GetTooltip(res.Date, i, type)">
+                {{GetOffsetDate(res.Date, i) | date:'dd.MM'}}</button>
+        </span>
+    </div>
+</div>

@@ -6,7 +6,7 @@
         <span *ngFor="let type of res.DayTypes; index as i">
             <button type="button" class="btn btn-sm" [class.btn-secondary]="type == FreeDayTypes.NONE"
                 [class.btn-success]="type == FreeDayTypes.HOLIDAY" [class.btn-primary]="type == FreeDayTypes.WEEKEND"
-                [class.btn-info]="type == FreeDayTypes.BRIDGE_DAY" [ngbTooltip]="GetTooltip(res.Date, i, type)" triggers="click:blur">
+                [class.btn-info]="type == FreeDayTypes.BRIDGE_DAY" [ngbTooltip]="GetTooltip(res.Date, i, type)" triggers="click:blur hover focus">
                 {{GetOffsetDate(res.Date, i) | date:'dd.MM'}}</button>
         </span>
     </div>

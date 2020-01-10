@@ -1,8 +1,7 @@
-import { Component, destroyPlatform } from '@angular/core';
+import { Component, destroyPlatform, ChangeDetectorRef } from '@angular/core';
 import { Result, FreeDayType } from '../data/Result';
 import { DataSet } from '../data/DataSet';
 import { HttpClient } from '@angular/common/http';
-
 
 @Component({
   selector: 'app-root',
@@ -44,24 +43,43 @@ export class AppComponent {
     }
   };
 
+  IsLoading: boolean = false;
   NumberOfDays: number = 5;
   AreBridgeDaysFree: boolean = false;
   Results: Array<Result> = [];
   Dataset: DataSet;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private cd: ChangeDetectorRef) {
     this.SelectedRegionName = this.RegionNames.BW;
   }
 
-  CalculateHolidays() {    
+  CalculateHolidays() {
+    // enable the loading indicator
+    this.IsLoading = true;
+    this.cd.detectChanges();
+
     // first get the dataset
     let currentYear = new Date().getFullYear();
 
-    let url = AppComponent.REQUEST_URL + "?jahr=" + currentYear + "&nur_land="+ this.SelectedRegion;
-    this.http.jsonp(url, "callback").subscribe(res => {
-      this.Dataset = new DataSet().parse(currentYear, this.SelectedRegion, res);
-      this.SearchStreaks();
-    });
+    // load the current year
+    this.http.jsonp(AppComponent.GetURL(currentYear, this.SelectedRegion), "callback").subscribe(
+      res => {
+        this.Dataset = new DataSet().parse(currentYear, this.SelectedRegion, res);
+
+        // load the next year
+        this.http.jsonp(AppComponent.GetURL(currentYear + 1, this.SelectedRegion), "callback").subscribe(
+          res => {
+            this.Dataset = this.Dataset.merge(
+              this.Dataset, new DataSet().parse(currentYear + 1, this.SelectedRegion, res)
+            );
+
+            this.SearchStreaks();
+
+            // disable the loading indicator
+            this.IsLoading = false;
+            this.cd.detectChanges();
+          })
+      });
   }
 
   SearchStreaks() {
@@ -74,7 +92,7 @@ export class AppComponent {
     let currentDate = yearStart;
 
     // iterate until the next year
-    let results = [];
+    let results = new Array<Result>();
     while (currentDate < new Date(currentYear + 1, 0, 1)) {
       let leftDays = this.NumberOfDays;
       let freeDays = 0;
@@ -82,13 +100,12 @@ export class AppComponent {
 
       // check only if the first day to check is free
       // otherwise equivalent timespans are put into the results
-      if (AppComponent.IsFreeDay(checkDate, this.Dataset, this.AreBridgeDaysFree)) 
-      {
+      if (AppComponent.IsFreeDay(checkDate, this.Dataset, this.AreBridgeDaysFree)) {
         // iterate until no holidays are left
         let dayTypes = []
         while (leftDays >= 0) {
           let dayType = AppComponent.IsFreeDay(checkDate, this.Dataset, this.AreBridgeDaysFree);
-          
+
           // if the day is not a free day, use a planned holiday
           if (dayType == FreeDayType.NONE) {
             leftDays--;
@@ -98,28 +115,51 @@ export class AppComponent {
               break;
             }
           }
-          freeDays++;          
+          freeDays++;
           dayTypes.push(dayType)
 
           checkDate.setDate(checkDate.getDate() + 1);
         }
 
-        // first fill up the results array
-        let resObj = new Result();
-        resObj.Date = new Date(currentDate);
-        resObj.FreeDays = freeDays;
-        resObj.DayTypes = dayTypes;
+        // first check if it's a valid results
+        // i.e. with only the results containing more than just the weekends
+        // and normal work days
+        let numNotWE = dayTypes.filter(dt => {
+          return dt != FreeDayType.WEEKEND && dt != FreeDayType.NONE
+        }).length;
 
-        if (results.length < AppComponent.NUM_RESULTS) {
-          results.push(resObj);
+        // also check if the days before and after are normal workdays
+        // otherwise this result would be suboptimal
+        let dayBefore = new Date(currentDate);
+        dayBefore.setDate(currentDate.getDate() - 1);
+        let dayBeforeFree = AppComponent.IsFreeDay(
+          dayBefore, this.Dataset, this.AreBridgeDaysFree);
 
-        } else {
+        let dayAfter = new Date(currentDate);
+        dayAfter.setDate(currentDate.getDate() + dayTypes.length);
+        let dayAfterFree = AppComponent.IsFreeDay(
+          dayAfter, this.Dataset, this.AreBridgeDaysFree);
+        console.log(currentDate, dayBefore, dayTypes.length, dayAfter);
 
-          // then check if the result is competitive
-          for (let i = 0; i < results.length; i++) {
-            if (results[i].FreeDays < freeDays) {
-              results[i] = resObj;
-              break;
+        let isValid = numNotWE > 0 && !(dayBeforeFree || dayAfterFree);
+        if (isValid) {
+          // then fill up the results array
+          let resObj = new Result();
+          resObj.Date = new Date(currentDate);
+          resObj.FreeDays = freeDays;
+          resObj.DayTypes = dayTypes;
+
+          if (results.length < AppComponent.NUM_RESULTS) {
+            results.push(resObj);
+
+          } else {
+
+            // then check if the result is competitive
+            for (let i = 0; i < results.length; i++) {
+              if (results[i].FreeDays < freeDays) {
+                results[i] = resObj;
+                break;
+              }
             }
           }
         }
@@ -127,11 +167,16 @@ export class AppComponent {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    results.sort((a, b) => a.Date - b.Date);
+    // sort the results
+    results.sort((a, b) => (+a.Date) - (+b.Date));
     results.sort((a, b) => b.FreeDays - a.FreeDays);
 
     console.log(results);
     this.Results = results;
+  }
+
+  static GetURL(currentYear: number, region: string) {
+    return AppComponent.REQUEST_URL + "?jahr=" + currentYear + "&nur_land=" + region;
   }
 
   static IsSameDate(date0: Date, date1: Date) {

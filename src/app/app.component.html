@@ -39,6 +39,10 @@
         </div>
       </div>
 
+      <div *ngIf="IsLoading" class="d-flex justify-content-center">
+        <img alt="laden..." src="assets/ring-alt.svg" style="width: 50px;" />
+      </div>
+
       <div *ngIf="Results">
         <hr />
         <results [Results]="Results" [Dataset]="Dataset"></results>
@@ -46,7 +50,7 @@
 
       <hr />
 
-      <span><a href="https://github.com/e1kable/Freitage" target="_blank">Repository</a> 
+      <span><a href="https://github.com/e1kable/Freitage" target="_blank">Repository</a>
         | Daten von <a href="https://feiertage-api.de/" target="_blank">https://feiertage-api.de/</a></span>
     </div>
   </div>
